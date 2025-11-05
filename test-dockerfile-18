@@ -1,0 +1,17 @@
+# Start with the official PostgreSQL image
+FROM postgres:18
+
+# Install pgTAP using apt (using PG17 package)
+RUN apt-get update && apt-get install -y \
+    postgresql-17-pgtap \
+    && apt-get clean \
+    && rm -rf /var/lib/apt/lists/*
+
+# Copy pgTAP extension files from PG17 to PG18 directories
+RUN cp -r /usr/share/postgresql/17/extension/pgtap* /usr/share/postgresql/18/extension/
+
+# enable the extension
+RUN echo "CREATE EXTENSION pgtap;" > /docker-entrypoint-initdb.d/01_pgtap.sql
+
+# Expose the PostgreSQL port
+EXPOSE 5432
