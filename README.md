@@ -100,10 +100,8 @@ Then, run the container as described above.
 The Dockerfile performs the following steps:
 
 1. Starts with the official PostgreSQL 17 image.
-2. Installs required dependencies for building and running pgTAP.
-3. Installs the `TAP::Parser::SourceHandler::pgTAP` Perl module.
-4. Clones, builds, and installs pgTAP from its official repository.
-5. Enables the `pgTAP` extension by adding it to the PostgreSQL initialization scripts.
+2. Installs pgTAP from Debian using apt.
+3. Enables the `pgTAP` extension by adding it to the PostgreSQL initialization scripts.
 
 ## Troubleshooting
 
