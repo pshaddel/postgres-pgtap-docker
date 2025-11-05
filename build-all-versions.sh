@@ -2,8 +2,8 @@
 
 # PostgreSQL versions to build
 declare -A POSTGRES_VERSIONS=(
-    ["18"]="18.0 18 latest 18.0-trixie 18-trixie trixie 18.0-bookworm 18-bookworm bookworm 18.0-alpine3.22 18-alpine3.22 alpine3.22 18.0-alpine 18-alpine alpine 18.0-alpine3.21 18-alpine3.21 alpine3.21"
-    # ["17"]="17.6 17 17.6-trixie 17-trixie 17.6-bookworm 17-bookworm 17.6-alpine3.22 17-alpine3.22 17.6-alpine 17-alpine 17.6-alpine3.21 17-alpine3.21"
+    ["18"]="18.0 18 latest 18.0-trixie 18-trixie trixie 18.0-bookworm 18-bookworm bookworm"
+    ["17"]="17.6 17 17.6-trixie 17-trixie 17.6-bookworm 17-bookworm"
 )
 
 # Function to build and push a specific version

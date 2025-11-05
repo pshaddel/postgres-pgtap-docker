@@ -19,13 +19,11 @@ docker exec -it postgres-pgtap psql -U postgres -c "SELECT pgtap_version();"
 
 ### PostgreSQL 18 (Latest)
 - `latest`, `18`, `18.0` - Standard Debian-based
-- `alpine`, `18-alpine` - Alpine Linux (smaller)
 - `bookworm`, `18-bookworm` - Debian Bookworm
 - `trixie`, `18-trixie` - Debian Trixie
 
 ### PostgreSQL 17
 - `17`, `17.6` - Standard Debian-based
-- `17-alpine`, `17.6-alpine` - Alpine Linux
 - `17-bookworm` - Debian Bookworm
 - `17-trixie` - Debian Trixie
 
@@ -35,7 +33,7 @@ docker exec -it postgres-pgtap psql -U postgres -c "SELECT pgtap_version();"
 - **🌍 Multi-platform** - AMD64, ARM64, ARMv7 support
 - **🔧 Auto-configured** - Extension enabled on startup
 - **🐳 Production-ready** - Based on official PostgreSQL images
-- **📦 Multiple variants** - Choose your base OS
+- **📦 Multiple variants** - Debian-based options available
 - **🔄 Auto-updated** - Latest PostgreSQL versions daily
 
 ## 📖 What is pgTAP?
@@ -116,7 +114,6 @@ This repository automatically:
 
 Choose the right image for your needs:
 - **Standard tags** (`latest`, `18`): Debian-based, full features
-- **Alpine tags** (`alpine`): Smaller size, security-focused
 - **Bookworm/Trixie**: Specific Debian versions for compatibility
 
 ## 💡 Why Use This Image?

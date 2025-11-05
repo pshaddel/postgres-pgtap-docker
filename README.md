@@ -6,7 +6,7 @@ This repository provides multi-version Docker images for PostgreSQL with the pgT
 
 - **Multi-version support**: PostgreSQL 18 and 17 images available
 - **Multi-platform**: Supports linux/arm/v7, linux/arm64/v8, and linux/amd64
-- **Multiple variants**: Standard (Debian), Alpine, Bookworm, and Trixie images
+- **Multiple variants**: Standard (Debian), Bookworm, and Trixie images
 - **pgTAP pre-installed**: Ready-to-use testing framework
 - **Auto-configured**: pgTAP extension enabled automatically on startup
 - **Production-ready**: Based on official PostgreSQL images
@@ -23,14 +23,12 @@ pgTAP is a unit testing framework for PostgreSQL that provides a set of function
 
 - `pshaddel/postgres-pgtap:latest` (same as 18.0)
 - `pshaddel/postgres-pgtap:18` or `pshaddel/postgres-pgtap:18.0`
-- `pshaddel/postgres-pgtap:18.0-alpine` or `pshaddel/postgres-pgtap:alpine`
 - `pshaddel/postgres-pgtap:18.0-bookworm` or `pshaddel/postgres-pgtap:bookworm`
 - `pshaddel/postgres-pgtap:18.0-trixie` or `pshaddel/postgres-pgtap:trixie`
 
 ### PostgreSQL 17
 
 - `pshaddel/postgres-pgtap:17` or `pshaddel/postgres-pgtap:17.6`
-- `pshaddel/postgres-pgtap:17.6-alpine`
 - `pshaddel/postgres-pgtap:17.6-bookworm`
 - `pshaddel/postgres-pgtap:17.6-trixie`
 
@@ -48,9 +46,9 @@ docker pull pshaddel/postgres-pgtap:latest
 docker pull pshaddel/postgres-pgtap:18
 docker pull pshaddel/postgres-pgtap:17
 
-# Alpine variants (smaller size)
-docker pull pshaddel/postgres-pgtap:alpine
-docker pull pshaddel/postgres-pgtap:17.6-alpine
+# Debian variants
+docker pull pshaddel/postgres-pgtap:bookworm
+docker pull pshaddel/postgres-pgtap:17.6-bookworm
 ```
 
 ### Run the Container
