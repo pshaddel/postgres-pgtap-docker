@@ -1,4 +1,4 @@
-name: Auto Update PostgreSQL Version
+name: Auto Update PostgreSQL Versions
 
 on:
   schedule:
@@ -7,42 +7,75 @@ on:
   workflow_dispatch: # Allow manual trigger
 
 jobs:
-  check-postgres-version:
+  check-postgres-versions:
     runs-on: ubuntu-latest
     steps:
       - name: Checkout code
         uses: actions/checkout@v4
 
-      - name: Check for new PostgreSQL version
+      - name: Check for new PostgreSQL versions
         id: check
         run: |
-          # Get latest PostgreSQL version from Docker Hub API
-          LATEST_VERSION=$(curl -s "https://registry.hub.docker.com/v2/repositories/library/postgres/tags/?page_size=100" | \
+          # Get latest PostgreSQL versions from Docker Hub API
+          LATEST_18=$(curl -s "https://registry.hub.docker.com/v2/repositories/library/postgres/tags/?page_size=100" | \
             jq -r '.results[].name' | \
-            grep -E '^[0-9]+(\.[0-9]+)*$' | \
+            grep -E '^18\.[0-9]+(\.[0-9]+)*$' | \
             sort -V | tail -1)
 
-          # Get current version from Dockerfile
-          CURRENT_VERSION=$(grep "FROM postgres:" dockerfile | sed 's/FROM postgres://')
+          LATEST_17=$(curl -s "https://registry.hub.docker.com/v2/repositories/library/postgres/tags/?page_size=100" | \
+            jq -r '.results[].name' | \
+            grep -E '^17\.[0-9]+(\.[0-9]+)*$' | \
+            sort -V | tail -1)
 
-          echo "Latest PostgreSQL version: $LATEST_VERSION"
-          echo "Current version in Dockerfile: $CURRENT_VERSION"
+          # Get current versions from build script
+          CURRENT_18=$(grep -A1 '\["18"\]=' build-all-versions.sh | grep -o '[0-9]\+\.[0-9]\+' | head -1)
+          CURRENT_17=$(grep -A1 '\["17"\]=' build-all-versions.sh | grep -o '[0-9]\+\.[0-9]\+' | head -1 || echo "")
 
-          if [ "$LATEST_VERSION" != "$CURRENT_VERSION" ]; then
-            echo "new_version=$LATEST_VERSION" >> $GITHUB_OUTPUT
-            echo "needs_update=true" >> $GITHUB_OUTPUT
+          echo "Latest PostgreSQL 18 version: $LATEST_18"
+          echo "Current PostgreSQL 18 version in script: $CURRENT_18"
+          echo "Latest PostgreSQL 17 version: $LATEST_17"
+          echo "Current PostgreSQL 17 version in script: $CURRENT_17"
+
+          NEEDS_UPDATE=false
+
+          if [ "$LATEST_18" != "$CURRENT_18" ]; then
+            echo "postgres_18_update=true" >> $GITHUB_OUTPUT
+            echo "new_version_18=$LATEST_18" >> $GITHUB_OUTPUT
+            NEEDS_UPDATE=true
           else
-            echo "needs_update=false" >> $GITHUB_OUTPUT
+            echo "postgres_18_update=false" >> $GITHUB_OUTPUT
           fi
 
-      - name: Update Dockerfile
+          if [ "$LATEST_17" != "$CURRENT_17" ] && [ -n "$CURRENT_17" ]; then
+            echo "postgres_17_update=true" >> $GITHUB_OUTPUT
+            echo "new_version_17=$LATEST_17" >> $GITHUB_OUTPUT
+            NEEDS_UPDATE=true
+          else
+            echo "postgres_17_update=false" >> $GITHUB_OUTPUT
+          fi
+
+          echo "needs_update=$NEEDS_UPDATE" >> $GITHUB_OUTPUT
+
+      - name: Update build script
         if: steps.check.outputs.needs_update == 'true'
         run: |
-          NEW_VERSION="${{ steps.check.outputs.new_version }}"
-          sed -i "s/FROM postgres:.*/FROM postgres:$NEW_VERSION/" dockerfile
+          # Update PostgreSQL 18 version if needed
+          if [ "${{ steps.check.outputs.postgres_18_update }}" = "true" ]; then
+            NEW_VERSION_18="${{ steps.check.outputs.new_version_18 }}"
+            MAJOR_18=$(echo $NEW_VERSION_18 | cut -d. -f1)
 
-          # Also update package name if needed
-          sed -i "s/postgresql-[0-9]\+-pgtap/postgresql-${NEW_VERSION%%.*}-pgtap/" dockerfile
+            # Update the PostgreSQL 18 version tags in build script
+            sed -i "s/\[\"18\"\]=\"[^\"]*\"/[\"18\"]=\"$NEW_VERSION_18 18 latest ${NEW_VERSION_18}-trixie 18-trixie trixie ${NEW_VERSION_18}-bookworm 18-bookworm bookworm ${NEW_VERSION_18}-alpine3.22 18-alpine3.22 alpine3.22 ${NEW_VERSION_18}-alpine 18-alpine alpine ${NEW_VERSION_18}-alpine3.21 18-alpine3.21 alpine3.21\"/" build-all-versions.sh
+          fi
+
+          # Update PostgreSQL 17 version if needed
+          if [ "${{ steps.check.outputs.postgres_17_update }}" = "true" ]; then
+            NEW_VERSION_17="${{ steps.check.outputs.new_version_17 }}"
+
+            # Uncomment and update PostgreSQL 17 line
+            sed -i 's/^[[:space:]]*# \[\["17"\]\]/    ["17"]/' build-all-versions.sh
+            sed -i "s/\[\"17\"\]=\"[^\"]*\"/[\"17\"]=\"$NEW_VERSION_17 17 ${NEW_VERSION_17}-trixie 17-trixie ${NEW_VERSION_17}-bookworm 17-bookworm ${NEW_VERSION_17}-alpine3.22 17-alpine3.22 ${NEW_VERSION_17}-alpine 17-alpine ${NEW_VERSION_17}-alpine3.21 17-alpine3.21\"/" build-all-versions.sh
+          fi
 
       - name: Set up Docker Buildx
         if: steps.check.outputs.needs_update == 'true'
@@ -55,29 +88,29 @@ jobs:
           username: ${{ secrets.DOCKERHUB_USERNAME }}
           password: ${{ secrets.DOCKERHUB_TOKEN }}
 
-      - name: Build and push multi-platform image
+      - name: Build and push multi-platform images
         if: steps.check.outputs.needs_update == 'true'
         run: |
-          NEW_VERSION="${{ steps.check.outputs.new_version }}"
-          docker buildx build \
-            --push \
-            --platform linux/arm/v7,linux/arm64/v8,linux/amd64 \
-            --tag pshaddel/postgres-pgtap:latest \
-            --tag pshaddel/postgres-pgtap:$NEW_VERSION \
-            .
+          # Make build script executable and run it
+          chmod +x build-all-versions.sh
+          ./build-all-versions.sh
 
       - name: Create Pull Request
         if: steps.check.outputs.needs_update == 'true'
         uses: peter-evans/create-pull-request@v5
         with:
           token: ${{ secrets.GITHUB_TOKEN }}
-          commit-message: "Update PostgreSQL to version ${{ steps.check.outputs.new_version }}"
-          title: "Auto-update PostgreSQL to ${{ steps.check.outputs.new_version }}"
+          commit-message: "Auto-update PostgreSQL versions"
+          title: "Auto-update PostgreSQL versions"
           body: |
-            This PR automatically updates PostgreSQL from the current version to ${{ steps.check.outputs.new_version }}.
+            This PR automatically updates PostgreSQL versions to the latest available.
 
-            Changes:
-            - Updated Dockerfile to use postgres:${{ steps.check.outputs.new_version }}
-            - Updated pgTAP package reference
-            - Built and pushed new Docker image
-          branch: auto-update-postgres-${{ steps.check.outputs.new_version }}
+            Updates:
+            ${{ steps.check.outputs.postgres_18_update == 'true' && format('- Updated PostgreSQL 18 to {0}', steps.check.outputs.new_version_18) || '' }}
+            ${{ steps.check.outputs.postgres_17_update == 'true' && format('- Updated PostgreSQL 17 to {0}', steps.check.outputs.new_version_17) || '' }}
+
+            The build script handles:
+            - Multi-platform builds (linux/arm/v7, linux/arm64/v8, linux/amd64)
+            - PostgreSQL 18 special handling (copying pgTAP from PG17)
+            - All variant tags (alpine, bookworm, trixie)
+          branch: auto-update-postgres-versions
