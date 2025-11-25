@@ -9,9 +9,16 @@ on:
 jobs:
   check-postgres-versions:
     runs-on: ubuntu-latest
+    permissions:
+      contents: write
+      pull-requests: write
     steps:
       - name: Checkout code
         uses: actions/checkout@v4
+        with:
+          # Use PAT if GITHUB_TOKEN doesn't have sufficient permissions
+          # token: ${{ secrets.PAT_TOKEN }}
+          fetch-depth: 0
 
       - name: Check for new PostgreSQL versions
         id: check
@@ -99,6 +106,8 @@ jobs:
         if: steps.check.outputs.needs_update == 'true'
         uses: peter-evans/create-pull-request@v5
         with:
+          # Use PAT if GITHUB_TOKEN doesn't have sufficient permissions
+          # token: ${{ secrets.PAT_TOKEN }}
           token: ${{ secrets.GITHUB_TOKEN }}
           commit-message: "Auto-update PostgreSQL versions"
           title: "Auto-update PostgreSQL versions"
