@@ -72,7 +72,7 @@ jobs:
             MAJOR_18=$(echo $NEW_VERSION_18 | cut -d. -f1)
 
             # Update the PostgreSQL 18 version tags in build script
-            sed -i "s/\[\"18\"\]=\"[^\"]*\"/[\"18\"]=\"$NEW_VERSION_18 18 latest ${NEW_VERSION_18}-trixie 18-trixie trixie ${NEW_VERSION_18}-bookworm 18-bookworm bookworm ${NEW_VERSION_18}-alpine3.22 18-alpine3.22 alpine3.22 ${NEW_VERSION_18}-alpine 18-alpine alpine ${NEW_VERSION_18}-alpine3.21 18-alpine3.21 alpine3.21\"/" build-all-versions.sh
+            sed -i "s/\[\"18\"\]=\"[^\"]*\"/[\"18\"]=\"$NEW_VERSION_18 18 latest ${NEW_VERSION_18}-trixie 18-trixie trixie ${NEW_VERSION_18}-bookworm 18-bookworm bookworm \"/" build-all-versions.sh
           fi
 
           # Update PostgreSQL 17 version if needed
@@ -81,7 +81,7 @@ jobs:
 
             # Uncomment and update PostgreSQL 17 line
             sed -i 's/^[[:space:]]*# \[\["17"\]\]/    ["17"]/' build-all-versions.sh
-            sed -i "s/\[\"17\"\]=\"[^\"]*\"/[\"17\"]=\"$NEW_VERSION_17 17 ${NEW_VERSION_17}-trixie 17-trixie ${NEW_VERSION_17}-bookworm 17-bookworm ${NEW_VERSION_17}-alpine3.22 17-alpine3.22 ${NEW_VERSION_17}-alpine 17-alpine ${NEW_VERSION_17}-alpine3.21 17-alpine3.21\"/" build-all-versions.sh
+            sed -i "s/\[\"17\"\]=\"[^\"]*\"/[\"17\"]=\"$NEW_VERSION_17 17 ${NEW_VERSION_17}-trixie 17-trixie ${NEW_VERSION_17}-bookworm 17-bookworm\"/" build-all-versions.sh
           fi
 
       - name: Set up Docker Buildx
@@ -121,5 +121,5 @@ jobs:
             The build script handles:
             - Multi-platform builds (linux/arm/v7, linux/arm64/v8, linux/amd64)
             - PostgreSQL 18 special handling (copying pgTAP from PG17)
-            - All variant tags (alpine, bookworm, trixie)
+            - All variant tags (bookworm, trixie)
           branch: auto-update-postgres-versions
