@@ -2,8 +2,8 @@ name: Auto Update PostgreSQL Versions
 
 on:
   schedule:
-    # Run daily at 2 AM UTC
-    - cron: '0 2 * * *'
+    # Run one a monthly at 2:00 AM UTC
+    - cron: '0 2 1 * *'
   workflow_dispatch: # Allow manual trigger
 
 jobs:
@@ -84,19 +84,70 @@ jobs:
             sed -i "s/\[\"17\"\]=\"[^\"]*\"/[\"17\"]=\"$NEW_VERSION_17 17 ${NEW_VERSION_17}-trixie 17-trixie ${NEW_VERSION_17}-bookworm 17-bookworm\"/" build-all-versions.sh
           fi
 
-      - name: Set up Docker Buildx
+      - name: Check if images need building
         if: steps.check.outputs.needs_update == 'true'
+        id: check_images
+        run: |
+          # Log in to Docker Hub first to access the registry
+          echo "${{ secrets.DOCKERHUB_TOKEN }}" | docker login -u "${{ secrets.DOCKERHUB_USERNAME }}" --password-stdin
+
+          # Make build script executable
+          chmod +x build-all-versions.sh
+
+          # Create a test script to check if any images need building
+          cat > check_images.sh << 'EOF'
+          #!/bin/bash
+
+          # Source the versions from build script
+          source build-all-versions.sh
+
+          # Function to check if Docker image already exists
+          image_exists() {
+              local image_tag=$1
+              if docker manifest inspect "pshaddel/postgres-pgtap:$image_tag" >/dev/null 2>&1; then
+                  return 0
+              else
+                  return 1
+              fi
+          }
+
+          # Check if any version needs building
+          needs_any_building=false
+          for version in "${!POSTGRES_VERSIONS[@]}"; do
+              tags="${POSTGRES_VERSIONS[$version]}"
+              for tag in $tags; do
+                  if ! image_exists "$tag"; then
+                      echo "Image pshaddel/postgres-pgtap:$tag does not exist, building needed"
+                      needs_any_building=true
+                      break 2
+                  fi
+              done
+          done
+
+          if [ "$needs_any_building" = true ]; then
+              echo "needs_building=true" >> $GITHUB_OUTPUT
+          else
+              echo "needs_building=false" >> $GITHUB_OUTPUT
+              echo "All images already exist, no building needed"
+          fi
+          EOF
+
+          chmod +x check_images.sh
+          ./check_images.sh
+
+      - name: Set up Docker Buildx
+        if: steps.check.outputs.needs_update == 'true' && steps.check_images.outputs.needs_building == 'true'
         uses: docker/setup-buildx-action@v3
 
       - name: Log in to Docker Hub
-        if: steps.check.outputs.needs_update == 'true'
+        if: steps.check.outputs.needs_update == 'true' && steps.check_images.outputs.needs_building == 'true'
         uses: docker/login-action@v3
         with:
           username: ${{ secrets.DOCKERHUB_USERNAME }}
           password: ${{ secrets.DOCKERHUB_TOKEN }}
 
       - name: Build and push multi-platform images
-        if: steps.check.outputs.needs_update == 'true'
+        if: steps.check.outputs.needs_update == 'true' && steps.check_images.outputs.needs_building == 'true'
         run: |
           # Make build script executable and run it
           chmod +x build-all-versions.sh
@@ -118,8 +169,12 @@ jobs:
             ${{ steps.check.outputs.postgres_18_update == 'true' && format('- Updated PostgreSQL 18 to {0}', steps.check.outputs.new_version_18) || '' }}
             ${{ steps.check.outputs.postgres_17_update == 'true' && format('- Updated PostgreSQL 17 to {0}', steps.check.outputs.new_version_17) || '' }}
 
+            Build status:
+            ${{ steps.check_images.outputs.needs_building == 'true' && '- Docker images were rebuilt and pushed' || '- No image rebuilding was needed (all images already exist)' }}
+
             The build script handles:
             - Multi-platform builds (linux/arm/v7, linux/arm64/v8, linux/amd64)
             - PostgreSQL 18 special handling (copying pgTAP from PG17)
             - All variant tags (bookworm, trixie)
+            - Skipping builds for images that already exist
           branch: auto-update-postgres-versions

@@ -6,10 +6,53 @@ declare -A POSTGRES_VERSIONS=(
     ["17"]="17.6 17 17.6-trixie 17-trixie 17.6-bookworm 17-bookworm"
 )
 
+# Function to check if Docker image already exists
+image_exists() {
+    local image_tag=$1
+    echo "Checking if image pshaddel/postgres-pgtap:$image_tag already exists..."
+
+    # Use docker manifest inspect to check if image exists (works for multi-platform images)
+    if docker manifest inspect "pshaddel/postgres-pgtap:$image_tag" >/dev/null 2>&1; then
+        echo "✓ Image pshaddel/postgres-pgtap:$image_tag already exists"
+        return 0
+    else
+        echo "✗ Image pshaddel/postgres-pgtap:$image_tag does not exist"
+        return 1
+    fi
+}
+
+# Function to check if any tags for a version need to be built
+needs_building() {
+    local tags=$1
+    local needs_build=false
+
+    for tag in $tags; do
+        if ! image_exists "$tag"; then
+            needs_build=true
+            break
+        fi
+    done
+
+    if [ "$needs_build" = true ]; then
+        return 0  # Needs building
+    else
+        return 1  # All images exist
+    fi
+}
+
 # Function to build and push a specific version
 build_version() {
     local base_version=$1
     local tags=$2
+
+    echo "Checking PostgreSQL $base_version with tags: $tags"
+
+    # Check if this version needs building
+    if ! needs_building "$tags"; then
+        echo "All images for PostgreSQL $base_version already exist, skipping build."
+        echo "----------------------------------------"
+        return 0
+    fi
 
     echo "Building PostgreSQL $base_version with tags: $tags"
 
