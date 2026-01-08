@@ -1,5 +1,5 @@
 # Start with the official PostgreSQL image
-FROM postgres:17
+FROM postgres:18
 
 # Install pgTAP using apt
 RUN apt-get update && apt-get install -y \
