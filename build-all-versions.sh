@@ -2,6 +2,7 @@
 
 # PostgreSQL versions to build
 declare -A POSTGRES_VERSIONS=(
+    ["19beta1"]="19beta1 19beta1-trixie 19beta1-bookworm"
     ["18"]="18.4 18 latest 18.4-trixie 18-trixie trixie 18.4-bookworm 18-bookworm bookworm "
     ["17"]="17.10 17 17.10-trixie 17-trixie 17.10-bookworm 17-bookworm"
 )
@@ -21,25 +22,6 @@ image_exists() {
     fi
 }
 
-# Function to check if any tags for a version need to be built
-needs_building() {
-    local tags=$1
-    local needs_build=false
-
-    for tag in $tags; do
-        if ! image_exists "$tag"; then
-            needs_build=true
-            break
-        fi
-    done
-
-    if [ "$needs_build" = true ]; then
-        return 0  # Needs building
-    else
-        return 1  # All images exist
-    fi
-}
-
 # Function to build and push a specific version
 build_version() {
     local base_version=$1
@@ -47,43 +29,52 @@ build_version() {
 
     echo "Checking PostgreSQL $base_version with tags: $tags"
 
-    # Check if this version needs building
-    if ! needs_building "$tags"; then
-        echo "All images for PostgreSQL $base_version already exist, skipping build."
+    # Strict per-tag policy: only push tags that don't already exist on Docker Hub.
+    # Floating tags (latest, 18, bookworm, ...) will NOT auto-roll to a newer PG
+    # version — delete them on Docker Hub first if you want them to move.
+    local missing_tags=()
+    for tag in $tags; do
+        if ! image_exists "$tag"; then
+            missing_tags+=("$tag")
+        fi
+    done
+
+    if [ ${#missing_tags[@]} -eq 0 ]; then
+        echo "All tags for PostgreSQL $base_version already exist, skipping build."
         echo "----------------------------------------"
         return 0
     fi
 
-    echo "Building PostgreSQL $base_version with tags: $tags"
+    echo "Building PostgreSQL $base_version for missing tags: ${missing_tags[*]}"
 
     # Create temporary Dockerfile for this version
     local dockerfile_temp="Dockerfile.${base_version}"
 
-    # Determine the pgTAP package name based on major version
-    local major_version=$(echo $base_version | cut -d. -f1)
+    # Extract numeric major version (handles "19beta1" → "19", "18.4" → "18")
+    local major_version=$(echo "$base_version" | grep -o '^[0-9]*')
 
-    # For PostgreSQL 18, use postgresql-17-pgtap as 18-pgtap is not available yet
-    if [ "$major_version" = "18" ]; then
+    # For PG18+ use postgresql-17-pgtap until a native package ships
+    if [ "$major_version" -ge 18 ] 2>/dev/null; then
         local pgtap_package="postgresql-17-pgtap"
     else
         local pgtap_package="postgresql-${major_version}-pgtap"
     fi
 
     # Create Dockerfile for this version
-    if [ "$major_version" = "18" ]; then
-        # Special handling for PostgreSQL 18 - copy pgTAP files from PG17 to PG18 directories
+    if [ "$major_version" -ge 18 ] 2>/dev/null; then
+        # Install PG17 pgTAP package and copy extension files into the target PG directory
         cat > "$dockerfile_temp" << EOF
 # Start with the official PostgreSQL image
 FROM postgres:${base_version}
 
-# Install pgTAP using apt (using PG17 package)
+# Install pgTAP using apt (using PG17 package; native PG${major_version} package not yet available)
 RUN apt-get update && apt-get install -y \\
     ${pgtap_package} \\
     && apt-get clean \\
     && rm -rf /var/lib/apt/lists/*
 
-# Copy pgTAP extension files from PG17 to PG18 directories
-RUN cp -r /usr/share/postgresql/17/extension/pgtap* /usr/share/postgresql/18/extension/
+# Copy pgTAP extension files from PG17 to PG${major_version} directories
+RUN cp -r /usr/share/postgresql/17/extension/pgtap* /usr/share/postgresql/${major_version}/extension/
 
 # enable the extension
 RUN echo "CREATE EXTENSION pgtap;" > /docker-entrypoint-initdb.d/01_pgtap.sql
@@ -110,9 +101,9 @@ EXPOSE 5432
 EOF
     fi
 
-    # Build tag arguments
+    # Build tag arguments (only the missing tags)
     local tag_args=""
-    for tag in $tags; do
+    for tag in "${missing_tags[@]}"; do
         tag_args="$tag_args --tag pshaddel/postgres-pgtap:$tag"
     done
 
@@ -134,13 +125,15 @@ EOF
     echo "----------------------------------------"
 }
 
-# Main execution
-echo "Starting multi-version PostgreSQL pgTAP builds..."
-echo "================================================"
+# Main execution — only run when this script is executed directly, not when sourced.
+# (auto-update.yml sources this file just to load POSTGRES_VERSIONS.)
+if [[ "${BASH_SOURCE[0]}" == "${0}" ]]; then
+    echo "Starting multi-version PostgreSQL pgTAP builds..."
+    echo "================================================"
 
-# Build each version
-for version in "${!POSTGRES_VERSIONS[@]}"; do
-    build_version "$version" "${POSTGRES_VERSIONS[$version]}"
-done
+    for version in "${!POSTGRES_VERSIONS[@]}"; do
+        build_version "$version" "${POSTGRES_VERSIONS[$version]}"
+    done
 
-echo "All builds completed!"
+    echo "All builds completed!"
+fi

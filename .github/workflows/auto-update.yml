@@ -88,52 +88,29 @@ jobs:
         if: steps.check.outputs.needs_update == 'true'
         id: check_images
         run: |
-          # Log in to Docker Hub first to access the registry
+          # Log in to Docker Hub to access the registry
           echo "${{ secrets.DOCKERHUB_TOKEN }}" | docker login -u "${{ secrets.DOCKERHUB_USERNAME }}" --password-stdin
 
-          # Make build script executable
-          chmod +x build-all-versions.sh
-
-          # Create a test script to check if any images need building
-          cat > check_images.sh << 'EOF'
-          #!/bin/bash
-
-          # Source the versions from build script
+          # Source build-all-versions.sh only to load POSTGRES_VERSIONS.
+          # Safe because the main build loop is guarded behind BASH_SOURCE.
           source build-all-versions.sh
 
-          # Function to check if Docker image already exists
-          image_exists() {
-              local image_tag=$1
-              if docker manifest inspect "pshaddel/postgres-pgtap:$image_tag" >/dev/null 2>&1; then
-                  return 0
-              else
-                  return 1
-              fi
-          }
-
-          # Check if any version needs building
-          needs_any_building=false
+          needs_building=false
           for version in "${!POSTGRES_VERSIONS[@]}"; do
-              tags="${POSTGRES_VERSIONS[$version]}"
-              for tag in $tags; do
-                  if ! image_exists "$tag"; then
-                      echo "Image pshaddel/postgres-pgtap:$tag does not exist, building needed"
-                      needs_any_building=true
+              for tag in ${POSTGRES_VERSIONS[$version]}; do
+                  if ! docker manifest inspect "pshaddel/postgres-pgtap:$tag" >/dev/null 2>&1; then
+                      echo "Missing tag: $tag — build needed"
+                      needs_building=true
                       break 2
                   fi
               done
           done
 
-          if [ "$needs_any_building" = true ]; then
-              echo "needs_building=true" >> $GITHUB_OUTPUT
-          else
-              echo "needs_building=false" >> $GITHUB_OUTPUT
+          if [ "$needs_building" = false ]; then
               echo "All images already exist, no building needed"
           fi
-          EOF
 
-          chmod +x check_images.sh
-          ./check_images.sh
+          echo "needs_building=$needs_building" >> "$GITHUB_OUTPUT"
 
       - name: Set up Docker Buildx
         if: steps.check.outputs.needs_update == 'true' && steps.check_images.outputs.needs_building == 'true'
