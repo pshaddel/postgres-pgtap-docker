@@ -159,7 +159,7 @@ jobs:
         with:
           # Use PAT if GITHUB_TOKEN doesn't have sufficient permissions
           # token: ${{ secrets.PAT_TOKEN }}
-          token: ${{ secrets.GITHUB_TOKEN }}
+          token: ${{ secrets.PAT_TOKEN || secrets.GITHUB_TOKEN }}
           commit-message: "Auto-update PostgreSQL versions"
           title: "Auto-update PostgreSQL versions"
           body: |
