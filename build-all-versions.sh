@@ -2,7 +2,7 @@
 
 # PostgreSQL versions to build
 declare -A POSTGRES_VERSIONS=(
-    ["19beta1"]="19beta1 19beta1-trixie 19beta1-bookworm"
+    ["19"]="19beta1 19beta1-trixie 19beta1-bookworm"
     ["18"]="18.4 18 latest 18.4-trixie 18-trixie trixie 18.4-bookworm 18-bookworm bookworm "
     ["17"]="17.10 17 17.10-trixie 17-trixie 17.10-bookworm 17-bookworm"
 )
@@ -23,11 +23,16 @@ image_exists() {
 }
 
 # Function to build and push a specific version
+# $1 = major version number (numeric key, e.g. 19, 18, 17)
+# $2 = space-separated tag list; first tag is used as the FROM image
 build_version() {
-    local base_version=$1
+    local major_version=$1
     local tags=$2
+    # First tag in the list is the pinned FROM image (e.g. "19beta1", "18.4", "17.10")
+    local from_image
+    from_image=$(echo "$tags" | awk '{print $1}')
 
-    echo "Checking PostgreSQL $base_version with tags: $tags"
+    echo "Checking PostgreSQL $major_version (FROM postgres:$from_image) with tags: $tags"
 
     # Strict per-tag policy: only push tags that don't already exist on Docker Hub.
     # Floating tags (latest, 18, bookworm, ...) will NOT auto-roll to a newer PG
@@ -40,63 +45,50 @@ build_version() {
     done
 
     if [ ${#missing_tags[@]} -eq 0 ]; then
-        echo "All tags for PostgreSQL $base_version already exist, skipping build."
+        echo "All tags for PostgreSQL $major_version already exist, skipping build."
         echo "----------------------------------------"
         return 0
     fi
 
-    echo "Building PostgreSQL $base_version for missing tags: ${missing_tags[*]}"
+    echo "Building PostgreSQL $major_version for missing tags: ${missing_tags[*]}"
 
-    # Create temporary Dockerfile for this version
-    local dockerfile_temp="Dockerfile.${base_version}"
-
-    # Extract numeric major version (handles "19beta1" → "19", "18.4" → "18")
-    local major_version=$(echo "$base_version" | grep -o '^[0-9]*')
+    local dockerfile_temp="Dockerfile.${major_version}"
 
     # For PG18+ use postgresql-17-pgtap until a native package ships
-    if [ "$major_version" -ge 18 ] 2>/dev/null; then
+    if [ "$major_version" -ge 18 ]; then
         local pgtap_package="postgresql-17-pgtap"
     else
         local pgtap_package="postgresql-${major_version}-pgtap"
     fi
 
-    # Create Dockerfile for this version
-    if [ "$major_version" -ge 18 ] 2>/dev/null; then
+    if [ "$major_version" -ge 18 ]; then
         # Install PG17 pgTAP package and copy extension files into the target PG directory
         cat > "$dockerfile_temp" << EOF
-# Start with the official PostgreSQL image
-FROM postgres:${base_version}
+FROM postgres:${from_image}
 
-# Install pgTAP using apt (using PG17 package; native PG${major_version} package not yet available)
+# native PG${major_version} pgTAP package not yet available; use PG17 and copy files
 RUN apt-get update && apt-get install -y \\
     ${pgtap_package} \\
     && apt-get clean \\
     && rm -rf /var/lib/apt/lists/*
 
-# Copy pgTAP extension files from PG17 to PG${major_version} directories
 RUN cp -r /usr/share/postgresql/17/extension/pgtap* /usr/share/postgresql/${major_version}/extension/
 
-# enable the extension
 RUN echo "CREATE EXTENSION pgtap;" > /docker-entrypoint-initdb.d/01_pgtap.sql
 
-# Expose the PostgreSQL port
 EXPOSE 5432
 EOF
     else
         cat > "$dockerfile_temp" << EOF
-# Start with the official PostgreSQL image
-FROM postgres:${base_version}
+FROM postgres:${from_image}
 
-# Install pgTAP using apt
 RUN apt-get update && apt-get install -y \\
     ${pgtap_package} \\
     && apt-get clean \\
     && rm -rf /var/lib/apt/lists/*
 
-# enable the extension
 RUN echo "CREATE EXTENSION pgtap;" > /docker-entrypoint-initdb.d/01_pgtap.sql
 
-# Expose the PostgreSQL port
 EXPOSE 5432
 EOF
     fi
@@ -121,7 +113,7 @@ EOF
     # Clean up temporary Dockerfile
     rm "$dockerfile_temp"
 
-    echo "Completed building PostgreSQL $base_version"
+    echo "Completed building PostgreSQL $major_version"
     echo "----------------------------------------"
 }
 

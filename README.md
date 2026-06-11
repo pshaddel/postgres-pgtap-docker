@@ -4,7 +4,7 @@ This repository provides multi-version Docker images for PostgreSQL with the pgT
 
 ## Features
 
-- **Multi-version support**: PostgreSQL 18 and 17 images available
+- **Multi-version support**: PostgreSQL 19 (beta), 18, and 17 images available
 - **Multi-platform**: Supports linux/arm/v7, linux/arm64/v8, and linux/amd64
 - **Multiple variants**: Standard (Debian), Bookworm, and Trixie images
 - **pgTAP pre-installed**: Ready-to-use testing framework
@@ -19,18 +19,26 @@ pgTAP is a unit testing framework for PostgreSQL that provides a set of function
 
 ## Available Tags
 
-### PostgreSQL 18 (Latest)
+### PostgreSQL 19 (Beta)
 
-- `pshaddel/postgres-pgtap:latest` (same as 18.0)
-- `pshaddel/postgres-pgtap:18` or `pshaddel/postgres-pgtap:18.0`
-- `pshaddel/postgres-pgtap:18.0-bookworm` or `pshaddel/postgres-pgtap:bookworm`
-- `pshaddel/postgres-pgtap:18.0-trixie` or `pshaddel/postgres-pgtap:trixie`
+> Beta images — not recommended for production use.
+
+- `pshaddel/postgres-pgtap:19beta1`
+- `pshaddel/postgres-pgtap:19beta1-bookworm`
+- `pshaddel/postgres-pgtap:19beta1-trixie`
+
+### PostgreSQL 18 (Latest Stable)
+
+- `pshaddel/postgres-pgtap:latest` (same as 18.4)
+- `pshaddel/postgres-pgtap:18` or `pshaddel/postgres-pgtap:18.4`
+- `pshaddel/postgres-pgtap:18.4-bookworm` or `pshaddel/postgres-pgtap:bookworm`
+- `pshaddel/postgres-pgtap:18.4-trixie` or `pshaddel/postgres-pgtap:trixie`
 
 ### PostgreSQL 17
 
-- `pshaddel/postgres-pgtap:17` or `pshaddel/postgres-pgtap:17.6`
-- `pshaddel/postgres-pgtap:17.6-bookworm`
-- `pshaddel/postgres-pgtap:17.6-trixie`
+- `pshaddel/postgres-pgtap:17` or `pshaddel/postgres-pgtap:17.10`
+- `pshaddel/postgres-pgtap:17.10-bookworm`
+- `pshaddel/postgres-pgtap:17.10-trixie`
 
 ## How to Use
 
@@ -141,11 +149,11 @@ docker build -t local-postgres-pgtap-17 -f dockerfile .
 
 The build process performs different steps depending on the PostgreSQL version:
 
-### PostgreSQL 18 Build Process
+### PostgreSQL 19 / 18 Build Process
 
-1. Starts with the official PostgreSQL 18 image
-2. Installs `postgresql-17-pgtap` package (since 18-specific package isn't available yet)
-3. Copies pgTAP extension files from PostgreSQL 17 directories to PostgreSQL 18 directories
+1. Starts with the official PostgreSQL image
+2. Installs `postgresql-17-pgtap` package (native PG18/19 package not yet available)
+3. Copies pgTAP extension files from the PostgreSQL 17 directories into the target version's directories
 4. Enables the `pgTAP` extension automatically on container startup
 
 ### PostgreSQL 17 Build Process
@@ -166,7 +174,7 @@ All images are built for multiple architectures:
 
 This repository includes automated workflows that:
 
-- **Daily checks**: Automatically check for new PostgreSQL versions every day at 2 AM UTC
+- **Monthly checks**: Automatically check for new PostgreSQL versions on the 1st of each month at 2 AM UTC
 - **Auto-building**: Automatically build and push new images when updates are detected
 - **Pull requests**: Create pull requests with version updates for review
 - **Multi-version support**: Handle both PostgreSQL 18 and 17 updates independently
