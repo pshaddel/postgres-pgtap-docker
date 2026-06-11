@@ -23,29 +23,32 @@ jobs:
       - name: Check for new PostgreSQL versions
         id: check
         run: |
-          # Get latest PostgreSQL versions from Docker Hub API
-          LATEST_18=$(curl -s "https://registry.hub.docker.com/v2/repositories/library/postgres/tags/?page_size=100" | \
-            jq -r '.results[].name' | \
-            grep -E '^18\.[0-9]+(\.[0-9]+)*$' | \
-            sort -V | tail -1)
+          TAGS=$(curl -s "https://registry.hub.docker.com/v2/repositories/library/postgres/tags/?page_size=100" | jq -r '.results[].name')
 
-          LATEST_17=$(curl -s "https://registry.hub.docker.com/v2/repositories/library/postgres/tags/?page_size=100" | \
-            jq -r '.results[].name' | \
-            grep -E '^17\.[0-9]+(\.[0-9]+)*$' | \
-            sort -V | tail -1)
+          LATEST_19=$(echo "$TAGS" | grep -E '^19beta[0-9]+$' | sort -V | tail -1)
+          LATEST_18=$(echo "$TAGS" | grep -E '^18\.[0-9]+(\.[0-9]+)*$' | sort -V | tail -1)
+          LATEST_17=$(echo "$TAGS" | grep -E '^17\.[0-9]+(\.[0-9]+)*$' | sort -V | tail -1)
 
-          # Get current versions from build script
-          CURRENT_18=$(grep -A1 '\["18"\]=' build-all-versions.sh | grep -o '[0-9]\+\.[0-9]\+' | head -1)
-          CURRENT_17=$(grep -A1 '\["17"\]=' build-all-versions.sh | grep -o '[0-9]\+\.[0-9]\+' | head -1 || echo "")
+          # Get current values from build script (first tag in each entry = the FROM image)
+          CURRENT_19=$(grep -o '\["19"\]="[^"]*"' build-all-versions.sh | grep -o '"[^"]*"$' | tr -d '"' | awk '{print $1}')
+          CURRENT_18=$(grep -o '\["18"\]="[^"]*"' build-all-versions.sh | grep -o '"[^"]*"$' | tr -d '"' | awk '{print $1}')
+          CURRENT_17=$(grep -o '\["17"\]="[^"]*"' build-all-versions.sh | grep -o '"[^"]*"$' | tr -d '"' | awk '{print $1}')
 
-          echo "Latest PostgreSQL 18 version: $LATEST_18"
-          echo "Current PostgreSQL 18 version in script: $CURRENT_18"
-          echo "Latest PostgreSQL 17 version: $LATEST_17"
-          echo "Current PostgreSQL 17 version in script: $CURRENT_17"
+          echo "Latest PG19: $LATEST_19  Current: $CURRENT_19"
+          echo "Latest PG18: $LATEST_18  Current: $CURRENT_18"
+          echo "Latest PG17: $LATEST_17  Current: $CURRENT_17"
 
           NEEDS_UPDATE=false
 
-          if [ "$LATEST_18" != "$CURRENT_18" ]; then
+          if [ -n "$LATEST_19" ] && [ "$LATEST_19" != "$CURRENT_19" ]; then
+            echo "postgres_19_update=true" >> $GITHUB_OUTPUT
+            echo "new_version_19=$LATEST_19" >> $GITHUB_OUTPUT
+            NEEDS_UPDATE=true
+          else
+            echo "postgres_19_update=false" >> $GITHUB_OUTPUT
+          fi
+
+          if [ -n "$LATEST_18" ] && [ "$LATEST_18" != "$CURRENT_18" ]; then
             echo "postgres_18_update=true" >> $GITHUB_OUTPUT
             echo "new_version_18=$LATEST_18" >> $GITHUB_OUTPUT
             NEEDS_UPDATE=true
@@ -53,7 +56,7 @@ jobs:
             echo "postgres_18_update=false" >> $GITHUB_OUTPUT
           fi
 
-          if [ "$LATEST_17" != "$CURRENT_17" ] && [ -n "$CURRENT_17" ]; then
+          if [ -n "$LATEST_17" ] && [ "$LATEST_17" != "$CURRENT_17" ]; then
             echo "postgres_17_update=true" >> $GITHUB_OUTPUT
             echo "new_version_17=$LATEST_17" >> $GITHUB_OUTPUT
             NEEDS_UPDATE=true
@@ -66,21 +69,21 @@ jobs:
       - name: Update build script
         if: steps.check.outputs.needs_update == 'true'
         run: |
+          # Update PostgreSQL 19 beta version if needed
+          if [ "${{ steps.check.outputs.postgres_19_update }}" = "true" ]; then
+            NEW_VERSION_19="${{ steps.check.outputs.new_version_19 }}"
+            sed -i "s/\[\"19\"\]=\"[^\"]*\"/[\"19\"]=\"$NEW_VERSION_19 ${NEW_VERSION_19}-trixie ${NEW_VERSION_19}-bookworm\"/" build-all-versions.sh
+          fi
+
           # Update PostgreSQL 18 version if needed
           if [ "${{ steps.check.outputs.postgres_18_update }}" = "true" ]; then
             NEW_VERSION_18="${{ steps.check.outputs.new_version_18 }}"
-            MAJOR_18=$(echo $NEW_VERSION_18 | cut -d. -f1)
-
-            # Update the PostgreSQL 18 version tags in build script
             sed -i "s/\[\"18\"\]=\"[^\"]*\"/[\"18\"]=\"$NEW_VERSION_18 18 latest ${NEW_VERSION_18}-trixie 18-trixie trixie ${NEW_VERSION_18}-bookworm 18-bookworm bookworm \"/" build-all-versions.sh
           fi
 
           # Update PostgreSQL 17 version if needed
           if [ "${{ steps.check.outputs.postgres_17_update }}" = "true" ]; then
             NEW_VERSION_17="${{ steps.check.outputs.new_version_17 }}"
-
-            # Uncomment and update PostgreSQL 17 line
-            sed -i 's/^[[:space:]]*# \[\["17"\]\]/    ["17"]/' build-all-versions.sh
             sed -i "s/\[\"17\"\]=\"[^\"]*\"/[\"17\"]=\"$NEW_VERSION_17 17 ${NEW_VERSION_17}-trixie 17-trixie ${NEW_VERSION_17}-bookworm 17-bookworm\"/" build-all-versions.sh
           fi
 
@@ -143,6 +146,7 @@ jobs:
             This PR automatically updates PostgreSQL versions to the latest available.
 
             Updates:
+            ${{ steps.check.outputs.postgres_19_update == 'true' && format('- Updated PostgreSQL 19 to {0}', steps.check.outputs.new_version_19) || '' }}
             ${{ steps.check.outputs.postgres_18_update == 'true' && format('- Updated PostgreSQL 18 to {0}', steps.check.outputs.new_version_18) || '' }}
             ${{ steps.check.outputs.postgres_17_update == 'true' && format('- Updated PostgreSQL 17 to {0}', steps.check.outputs.new_version_17) || '' }}
 
