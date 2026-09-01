@@ -2,9 +2,9 @@
 
 # PostgreSQL versions to build
 declare -A POSTGRES_VERSIONS=(
-    ["19"]="19beta1 19beta1-trixie 19beta1-bookworm"
-    ["18"]="18.4 18 latest 18.4-trixie 18-trixie trixie 18.4-bookworm 18-bookworm bookworm "
-    ["17"]="17.10 17 17.10-trixie 17-trixie 17.10-bookworm 17-bookworm"
+    ["19"]="19beta3 19beta3-trixie 19beta3-bookworm"
+    ["18"]="18.6 18 latest 18.6-trixie 18-trixie trixie 18.6-bookworm 18-bookworm bookworm "
+    ["17"]="17.11 17 17.11-trixie 17-trixie 17.11-bookworm 17-bookworm"
 )
 
 # Function to check if Docker image already exists
